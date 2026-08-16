@@ -1,9 +1,3 @@
-  ______   ______  .__   __.  __  .__   __.   ______     ______   .______       ______    ___   .______    __    __  ____    ____
- /      | /  __  \ |  \ |  | |  | |  \ |  |  /  __  \   /  __  \  |   _  \     /      |  /   \  |   _  \  |  |  |  | \   \  /   /
-|  ,----'|  |  |  ||   \|  | |  | |   \|  | |  |  |  | |  |  |  | |  |_)  |   |  ,----' /  ^  \ |  |_)  | |  |__|  |  \   \/   /
-|  |     |  |  |  ||  . `  | |  | |  . `  | |  |  |  | |  |  |  | |      /    |  |     /  /_\  \|   ___/  |   __   |   \_    _/
-|  `----.|  `--'  ||  |\   | |  | |  ||\   | |  `--'  | |  `--'  | |  |\  \----.|  `----./  _____  \  |       |  |  |  |    |  |
- \______| \______/ |__| \__| |__| |__| \__|  \______/   \______/  | _| `._____| \______/__/     \__\ _|       |__|  |__|    |__|
 
 # CANINOGRAPHY — THE LIVING DIGITAL ARCHIVE
 
@@ -182,7 +176,7 @@ Adjust to match the actual repo layout.
 
 ## License
 
-See LICENSE in this repository for the full license. If no license file is present, contact the repository owner for usage rights.
+MIT LICENSE 
 
 ---
 
@@ -190,4 +184,4 @@ See LICENSE in this repository for the full license. If no license file is prese
 
 Repository: https://github.com/maisamabbas0323/canonigraphy
 
-Caninography © 2026. Manufactured for scholarly & visual exploration.
+2026. Manufactured for scholarly & visual exploration.
