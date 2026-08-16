@@ -1,0 +1,6 @@
+{
+  "name": "CANINOGRAPHY",
+  "description": "The Living Archive of Earth's Dogs. A cinematic interactive documentary and visual archive documenting recognized dog breeds from around the world.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
