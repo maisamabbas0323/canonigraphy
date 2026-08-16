@@ -1,11 +1,9 @@
-```
   ______   ______  .__   __.  __  .__   __.   ______     ______   .______       ______    ___   .______    __    __  ____    ____
  /      | /  __  \ |  \ |  | |  | |  \ |  |  /  __  \   /  __  \  |   _  \     /      |  /   \  |   _  \  |  |  |  | \   \  /   /
 |  ,----'|  |  |  ||   \|  | |  | |   \|  | |  |  |  | |  |  |  | |  |_)  |   |  ,----' /  ^  \ |  |_)  | |  |__|  |  \   \/   /
 |  |     |  |  |  ||  . `  | |  | |  . `  | |  |  |  | |  |  |  | |      /    |  |     /  /_\  \|   ___/  |   __   |   \_    _/
 |  `----.|  `--'  ||  |\   | |  | |  ||\   | |  `--'  | |  `--'  | |  |\  \----.|  `----./  _____  \  |       |  |  |  |    |  |
  \______| \______/ |__| \__| |__| |__| \__|  \______/   \______/  | _| `._____| \______/__/     \__\ _|       |__|  |__|    |__|
-```
 
 # CANINOGRAPHY — THE LIVING DIGITAL ARCHIVE
 
@@ -13,66 +11,183 @@ An elegant, visually quiet, and premium digital museum archive, cartography atla
 
 ---
 
-## DESIGN PHILOSOPHY & TOKENS
+## About
+
+Caninography is a curated digital archive and research-focused platform that documents the evolution, geography, and genetics of domestic and wild canid species. The project combines high-fidelity imagery, structured metadata, geospatial mapping, and interactive phylogenetic visualizations to support scholars, curators, and enthusiasts.
+
+This repository contains the front-end editorial interface, static assets, and build tooling used to produce the Caninography publication and exploratory visualizations.
+
+---
+
+## Design Philosophy & Tokens
 
 This platform is structured around a premium dark editorial aesthetic inspired by high-end museum catalogs, scientific taxonomy databases, and cinematic digital publications.
 
-### Palette Configuration
-- **Background**: Absolute Dark `#050505` to `#070707`
-- **Surfaces**: Near-Black Panel `#0D0D0D` and soft graphite layers
-- **Borders**: Thin hairline separators at `rgba(255,255,255,0.05)`
-- **Typography Primary**: Soft Warm-White `#F5F5F2`
-- **Typography Secondary**: Graphite Muted-Gray `#8C8C87`
-- **Restrained Accents**: Selective warm gold `amber-400` highlight for high-impact metrics only.
+### Palette
+- Background: Absolute Dark `#050505` to `#070707`
+- Surfaces: Near-Black Panel `#0D0D0D`
+- Borders: Thin separators `rgba(255,255,255,0.05)`
+- Typography Primary: Soft Warm-White `#F5F5F2`
+- Typography Secondary: Graphite `#8C8C87`
+- Accents: Warm gold (used sparingly for highlights)
 
-### Typographic Pairings
-- **Display**: Regal, elegant Serif Display (`Playfair Display`, `Cormorant Garamond`)
-- **Metadata & Controls**: Structured Monospace and minimal Sans-serif layout engines.
-
----
-
-## STRUCTURAL PORTALS
-
-### 1. Vol I // The Central Registry (Archive)
-- An authoritative visual index documenting breed lineage, purpose, country, and era.
-- Structured with an interactive collectible record layout.
-- Integrates searching, sorting, working group filtering, and alphabetical character jump bars.
-
-### 2. Vol I // Cartography (World Atlas)
-- Visual exploration of breed geographical points on an equirectangular vector projection map.
-- Coordinates mapping nodes with soft concentric pulse animations.
-- Sits alongside a reactive territory snapshot profile panel showing historical and structural biomes.
-
-### 3. Vol I // Territory & Biome (Origins)
-- Split master-detail layout detailing the geographical context and native evolution environments.
-- High-fidelity lists highlighting documented breeds within distinct ecological domains.
-
-### 4. Vol I // Genetic Matrix (Constellation)
-- Interactive, responsive mathematical node-link visualization on a `<canvas>` element mapping phylogenetic connections.
-- Automatically adjusts nodes circular layout on resize using a `ResizeObserver`.
-- Softly illuminates chosen species with adjacent lineage pathways.
+### Type
+- Display: Serif Display (e.g., `Playfair Display`, `Cormorant Garamond`)
+- Metadata & Controls: Monospace and minimal Sans-serif
 
 ---
 
-## DEVELOPING & RUNNING LOCAL REGISTRATION
+## Key Sections (Structural Portals)
 
-### Installation
-Ensure packages are restored:
+- Vol I — Central Registry (Archive): authoritative visual index of breeds and lineages
+- Vol II — Cartography (World Atlas): geospatial exploration with node-based mapping
+- Vol III — Territory & Biome (Origins): ecological and regional context
+- Vol IV — Genetic Matrix (Constellation): interactive phylogenetic node-link visualizations
+
+---
+
+## Features
+
+- Structured breed records with metadata (origin, purpose, era)
+- Interactive geography with coordinate-based nodes
+- Responsive phylogenetic visualizations rendered to `<canvas>`
+- Search, sort, filter, and curated collections
+- High-resolution imagery and editorial layout for publication-quality presentation
+
+---
+
+## Technology
+
+- Front-end: modern JavaScript framework (React / Vue / Svelte — see package.json for current choice)
+- Build: Vite / Webpack / Rollup (see project config)
+- Styling: CSS Modules / Tailwind / Sass (see source styles)
+- Mapping: Vector-based map layer(s) and custom canvas renderer for the genetic matrix
+
+Refer to package.json and project config files for the exact dependencies and versions.
+
+---
+
+## Installation
+
+Prerequisites
+- Node.js >= 16 (Node 18+ recommended)
+- npm >= 8 or yarn / pnpm
+
+Clone the repository
+
 ```bash
-npm install
+git clone https://github.com/maisamabbas0323/canonigraphy.git
+cd canonigraphy
 ```
 
-### Development Server
-Spawn local dev runtime on port `3000`:
+Install dependencies
+
+```bash
+npm install
+# or
+# yarn install
+# pnpm install
+```
+
+Environment
+- If the project uses environment variables, copy or create an `.env` from the example (if provided):
+
+```bash
+cp .env.example .env
+```
+
+---
+
+## Running Locally
+
+Start the development server (defaults to port 3000)
+
 ```bash
 npm run dev
 ```
 
-### Static Asset Optimization
-Compile and build static editorial bundles:
+Visit http://localhost:3000 to view the app in development mode.
+
+---
+
+## Build for Production
+
+Compile production assets and optimize static bundles
+
 ```bash
 npm run build
 ```
 
+Preview the production build locally
+
+```bash
+npm run preview
+```
+
 ---
-*Caninography © 2026. Manufactured for scholarly & visual exploration.*
+
+## Testing & Linting
+
+If tests or linters are configured, run:
+
+```bash
+npm test
+npm run lint
+```
+
+Add or update scripts in package.json if these commands are not present.
+
+---
+
+## Content & Data
+
+Data Model (high level)
+- Breeds: canonical records with fields such as `name`, `aliases`, `origin`, `coordinates`, `era`, `purpose`, `images`, and `genetic_markers`.
+- Regions/Biomes: grouped geographic and ecological metadata for contextualizing origins.
+- Genetic links: edge lists describing phylogenetic relationships used by the Genetic Matrix visualization.
+
+Adding new records
+- Add structured JSON or markdown files under the `data/` or `content/` directory (see repository structure).
+- Provide metadata and associate media in the `static/` or `assets/` directory.
+
+---
+
+## Contributing
+
+Contributions are welcome. Suggested workflow:
+
+1. Fork the repository and create a feature branch: `git checkout -b feat/describe-breed`
+2. Implement changes with clear commits
+3. Run tests and linters locally
+4. Open a pull request describing the change and linking related issues
+
+Guidelines
+- Follow the existing code and styling conventions
+- Keep commit messages concise and descriptive
+- Include examples or screenshots for UI changes
+
+---
+
+## Project Structure (example)
+
+- src/ — application source code
+- public/ or static/ — static assets and images
+- data/ or content/ — structured records for breeds and regions
+- scripts/ — utilities and build helpers
+- package.json — scripts and dependency declarations
+
+Adjust to match the actual repo layout.
+
+---
+
+## License
+
+See LICENSE in this repository for the full license. If no license file is present, contact the repository owner for usage rights.
+
+---
+
+## Contact & Acknowledgements
+
+Repository: https://github.com/maisamabbas0323/canonigraphy
+
+Caninography © 2026. Manufactured for scholarly & visual exploration.
