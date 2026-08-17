@@ -113,6 +113,47 @@ export interface DocumentaryNarrationResponse {
   captions: Array<{ start: number; end: number; text: string }>;
 }
 
+export interface BreedAIInfo {
+  history: string;
+  superpower: {
+    title: string;
+    description: string;
+    anatomicalTrait: string;
+  };
+  historicalFact: string;
+  loreSnippet: string;
+  funFacts: string[];
+  generatedByApi?: boolean;
+}
+
+export interface BreedStats {
+  scentIndex: number;
+  sprintSpeedKmh: number;
+  coldTolerance: 'Low' | 'Moderate' | 'High' | 'Extreme';
+  heatTolerance: 'Low' | 'Moderate' | 'High' | 'Extreme';
+  biteForcePsi: number;
+  trainabilityRating: number;
+  vocalizationType: string;
+  sheddingRating: number;
+}
+
+export interface BreedAIInfoResponse {
+  breedSlug: string;
+  info: BreedAIInfo;
+  cached: boolean;
+}
+
+export interface CountryAIInfo {
+  historicalContext: string;
+  generatedByApi?: boolean;
+}
+
+export interface CountryAIInfoResponse {
+  countryCode: string;
+  info: CountryAIInfo;
+  cached: boolean;
+}
+
 export interface AmbientTrack {
   id: string;
   category: AmbienceCategory;

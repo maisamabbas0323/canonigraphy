@@ -1,30 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Sparkles,
-  BookOpen,
-  Compass,
-  Activity,
-  Award,
   Zap,
-  Shield,
-  Heart,
   Bookmark,
   Share2,
   Maximize2,
   Minimize2,
-  Info,
   Check,
   ChevronLeft,
   ChevronRight,
-  MapPin,
-  Calendar,
-  Layers,
   ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Breed } from '../types';
 import { BREEDS } from '../data/breeds';
-import { getBreedCuriosity } from '../data/breedCuriosities';
+import { useBreedInfo } from '../hooks/useBreedInfo';
 
 interface BreedShowcaseProps {
   currentBreed: Breed;
@@ -61,7 +50,7 @@ export const BreedShowcase: React.FC<BreedShowcaseProps> = ({
 
   const dossierRef = useRef<HTMLDivElement>(null);
 
-  const curiosity = getBreedCuriosity(currentBreed.slug, currentBreed);
+  const { info: curiosity, stats, isLoading: curiosityLoading } = useBreedInfo(currentBreed);
 
   const images =
     currentBreed.images && currentBreed.images.length > 0
@@ -360,12 +349,18 @@ export const BreedShowcase: React.FC<BreedShowcaseProps> = ({
                   02 // HISTORY & NATURAL ORIGIN
                 </span>
                 <p className="text-xl md:text-2xl font-serif text-[#F5F5F2] font-light leading-relaxed">
-                  {currentBreed.cinematicNarration || currentBreed.history}
+                  {currentBreed.cinematicNarration || curiosity.history}
                 </p>
                 <div className="h-[1px] bg-white/5 my-6" />
                 <p className="text-sm text-[#8C8C87] leading-relaxed">
-                  {currentBreed.history}
+                  {curiosity.history}
                 </p>
+                {curiosityLoading && (
+                  <div className="flex items-center space-x-2 text-[10px] text-white/30 font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50 animate-pulse" />
+                    <span>Generating from gemini-3.1-flash-lite...</span>
+                  </div>
+                )}
               </div>
 
               {/* Image panels (editorial secondary photographic collection) */}
@@ -399,11 +394,11 @@ export const BreedShowcase: React.FC<BreedShowcaseProps> = ({
               <div className="p-6 rounded-3xl bg-[#0D0D0D] border border-white/5 space-y-3">
                 <span className="text-[10px] font-mono tracking-wider text-[#8C8C87] uppercase">Scent Acuity</span>
                 <div className="flex items-baseline space-x-2">
-                  <span className="text-3xl font-serif font-bold text-white">{curiosity.stats.scentIndex}</span>
+                  <span className="text-3xl font-serif font-bold text-white">{stats.scentIndex}</span>
                   <span className="text-xs font-mono text-white/50">/ 100</span>
                 </div>
                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-white rounded-full" style={{ width: `${curiosity.stats.scentIndex}%` }} />
+                  <div className="h-full bg-white rounded-full" style={{ width: `${stats.scentIndex}%` }} />
                 </div>
                 <p className="text-[10px] text-white/40 leading-relaxed">
                   Olfactory receptors density indexing compared to native wild canines.
@@ -414,11 +409,11 @@ export const BreedShowcase: React.FC<BreedShowcaseProps> = ({
               <div className="p-6 rounded-3xl bg-[#0D0D0D] border border-white/5 space-y-3">
                 <span className="text-[10px] font-mono tracking-wider text-[#8C8C87] uppercase">Top Sprint Velocity</span>
                 <div className="flex items-baseline space-x-2">
-                  <span className="text-3xl font-serif font-bold text-white">{curiosity.stats.sprintSpeedKmh}</span>
+                  <span className="text-3xl font-serif font-bold text-white">{stats.sprintSpeedKmh}</span>
                   <span className="text-xs font-mono text-white/50">km/h</span>
                 </div>
                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-white rounded-full" style={{ width: `${Math.min(100, (curiosity.stats.sprintSpeedKmh / 70) * 100)}%` }} />
+                  <div className="h-full bg-white rounded-full" style={{ width: `${Math.min(100, (stats.sprintSpeedKmh / 70) * 100)}%` }} />
                 </div>
                 <p className="text-[10px] text-white/40 leading-relaxed">
                   Peak burst sprint capability under optimal pastoral testing environments.
@@ -429,11 +424,11 @@ export const BreedShowcase: React.FC<BreedShowcaseProps> = ({
               <div className="p-6 rounded-3xl bg-[#0D0D0D] border border-white/5 space-y-3">
                 <span className="text-[10px] font-mono tracking-wider text-[#8C8C87] uppercase">Bite Force</span>
                 <div className="flex items-baseline space-x-2">
-                  <span className="text-3xl font-serif font-bold text-white">~{curiosity.stats.biteForcePsi}</span>
+                  <span className="text-3xl font-serif font-bold text-white">~{stats.biteForcePsi}</span>
                   <span className="text-xs font-mono text-white/50">PSI</span>
                 </div>
                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-white rounded-full" style={{ width: `${Math.min(100, (curiosity.stats.biteForcePsi / 500) * 100)}%` }} />
+                  <div className="h-full bg-white rounded-full" style={{ width: `${Math.min(100, (stats.biteForcePsi / 500) * 100)}%` }} />
                 </div>
                 <p className="text-[10px] text-white/40 leading-relaxed">
                   Calculated cranial leverage pressure during protective trials.
@@ -445,7 +440,7 @@ export const BreedShowcase: React.FC<BreedShowcaseProps> = ({
                 <span className="text-[10px] font-mono tracking-wider text-[#8C8C87] uppercase">Trainability Index</span>
                 <div className="flex items-baseline space-x-1.5 text-amber-300">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <span key={i} className="text-lg">{i < curiosity.stats.trainabilityRating ? '★' : '☆'}</span>
+                    <span key={i} className="text-lg">{i < stats.trainabilityRating ? '★' : '☆'}</span>
                   ))}
                 </div>
                 <p className="text-[10px] text-white/40 leading-relaxed pt-2">
@@ -485,15 +480,15 @@ export const BreedShowcase: React.FC<BreedShowcaseProps> = ({
                 <div className="space-y-2.5 text-xs text-[#8C8C87]">
                   <div className="flex justify-between py-1.5 border-b border-white/5">
                     <span>Cold Tolerance</span>
-                    <span className="text-white">{curiosity.stats.coldTolerance}</span>
+                    <span className="text-white">{stats.coldTolerance}</span>
                   </div>
                   <div className="flex justify-between py-1.5 border-b border-white/5">
                     <span>Heat Tolerance</span>
-                    <span className="text-white">{curiosity.stats.heatTolerance}</span>
+                    <span className="text-white">{stats.heatTolerance}</span>
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span>Seasonal Shedding</span>
-                    <span className="text-white font-mono">{curiosity.stats.sheddingRating} / 5</span>
+                    <span className="text-white font-mono">{stats.sheddingRating} / 5</span>
                   </div>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, ExternalLink, ArrowRight, Zap, Shield, Sparkles } from 'lucide-react';
+import { X, ArrowRight, Zap, Sparkles } from 'lucide-react';
 import { Breed } from '../types';
-import { getBreedCuriosity } from '../data/breedCuriosities';
+import { useBreedInfo } from '../hooks/useBreedInfo';
 import { soundEffects } from '../services/soundEffects';
 
 interface BreedDetailPanelProps {
@@ -21,7 +21,19 @@ export const BreedDetailPanel: React.FC<BreedDetailPanelProps> = ({
 }) => {
   if (!isOpen || !breed) return null;
 
-  const curiosity = getBreedCuriosity(breed.slug, breed);
+  return (
+    <BreedDetailPanelInner breed={breed} isOpen={isOpen} onClose={onClose} onSelectRelatedBreed={onSelectRelatedBreed} onOpenCountry={onOpenCountry} />
+  );
+};
+
+const BreedDetailPanelInner: React.FC<{
+  breed: Breed;
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectRelatedBreed: (slug: string) => void;
+  onOpenCountry: (countryName: string) => void;
+}> = ({ breed, isOpen, onClose, onSelectRelatedBreed, onOpenCountry }) => {
+  const { info: curiosity, isLoading: curiosityLoading } = useBreedInfo(breed);
 
   return (
     <div
@@ -160,7 +172,13 @@ export const BreedDetailPanel: React.FC<BreedDetailPanelProps> = ({
               Historical Chronicle & Working Lineage
             </h3>
             <div className="space-y-3 text-xs sm:text-sm font-sans text-[#D8D8D2] leading-relaxed font-light">
-              <p>{breed.history}</p>
+              <p>{curiosity.history}</p>
+              {curiosityLoading && (
+                <div className="flex items-center space-x-2 text-[10px] text-white/30 font-mono pt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50 animate-pulse" />
+                  <span>Generating from gemini-3.1-flash-lite...</span>
+                </div>
+              )}
             </div>
           </div>
 

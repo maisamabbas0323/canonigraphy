@@ -3,6 +3,7 @@ import { ArrowUpRight, Compass, Layers, Zap } from 'lucide-react';
 import { Breed } from '../types';
 import { COUNTRIES } from '../data/countries';
 import { getBreedCuriosity } from '../data/breedCuriosities';
+import { useCountryInfo } from '../hooks/useCountryInfo';
 
 interface CountryExplorerProps {
   breeds: Breed[];
@@ -31,6 +32,10 @@ export const CountryExplorer: React.FC<CountryExplorerProps> = ({
   };
 
   const activeCoords = extractCoords(activeCountry?.coordinates);
+  const { info: countryInfo, isLoading: countryInfoLoading } = useCountryInfo(
+    activeCountry.code,
+    activeCountry.historicalContext || ''
+  );
 
   return (
     <div
@@ -119,8 +124,14 @@ export const CountryExplorer: React.FC<CountryExplorerProps> = ({
                 GEOGRAPHIC & HISTORICAL CONTEXT
               </h4>
               <p className="text-sm text-[#D8D8D2] leading-relaxed font-light font-sans">
-                {activeCountry.description || activeCountry.historicalContext}
+                {countryInfo.historicalContext}
               </p>
+              {countryInfoLoading && (
+                <div className="flex items-center space-x-2 text-[10px] text-white/30 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400/50 animate-pulse" />
+                  <span>Generating from gemini-3.1-flash-lite...</span>
+                </div>
+              )}
             </div>
 
             <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-4 text-[11px] font-mono text-[#8C8C87] uppercase tracking-wider">

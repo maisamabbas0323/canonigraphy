@@ -1,4 +1,4 @@
-import { GeminiStatus, DocumentaryNarrationResponse } from '../types';
+import { GeminiStatus, DocumentaryNarrationResponse, BreedAIInfoResponse, CountryAIInfoResponse } from '../types';
 
 export async function checkGeminiStatus(): Promise<{ status: GeminiStatus; message: string; configured: boolean }> {
   try {
@@ -77,5 +77,90 @@ export function prefetchDocumentaryNarration(breedSlug: string): void {
   const variationSeed = Math.floor(Math.random() * 1e9);
   if (!clientNarrationCache.has(`${breedSlug}::seed:${variationSeed}`)) {
     fetchDocumentaryNarration(breedSlug, { forceRefresh: true, variationSeed }).catch(() => {});
+  }
+}
+
+// Client-side cache for breed informational content (keyed by slug + seed)
+const breedInfoCache = new Map<string, BreedAIInfoResponse>();
+
+export async function fetchBreedInfo(
+  breedSlug: string,
+  options?: { forceRefresh?: boolean; variationSeed?: number }
+): Promise<BreedAIInfoResponse> {
+  const forceRefresh = options?.forceRefresh !== undefined ? options.forceRefresh : true;
+  const variationSeed = options?.variationSeed ?? Math.floor(Math.random() * 1e9);
+
+  // When force refreshing, use timestamp-based bustCache to guarantee fresh content
+  const bustCache = forceRefresh ? Date.now() : undefined;
+  const cacheKey = `${breedSlug}::bust:${bustCache || variationSeed}`;
+
+  if (!forceRefresh) {
+    const cached = breedInfoCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  try {
+    const res = await fetch('/api/gemini/breed-info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ breedSlug, variationSeed, bustCache }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const errMsg = errJson?.error || `Server returned ${res.status}`;
+      throw new Error(errMsg);
+    }
+
+    const data: BreedAIInfoResponse = await res.json();
+    breedInfoCache.set(cacheKey, data);
+    return data;
+  } catch (err) {
+    console.warn(`[GeminiService] Failed to fetch breed info for ${breedSlug}`, err);
+    throw err;
+  }
+}
+
+// Client-side cache for country info (keyed by countryCode + seed)
+const countryInfoCache = new Map<string, CountryAIInfoResponse>();
+
+export async function fetchCountryInfo(
+  countryCode: string,
+  options?: { forceRefresh?: boolean; variationSeed?: number }
+): Promise<CountryAIInfoResponse> {
+  const forceRefresh = options?.forceRefresh !== undefined ? options.forceRefresh : true;
+  const variationSeed = options?.variationSeed ?? Math.floor(Math.random() * 1e9);
+
+  const bustCache = forceRefresh ? Date.now() : undefined;
+  const cacheKey = `${countryCode}::bust:${bustCache || variationSeed}`;
+
+  if (!forceRefresh) {
+    const cached = countryInfoCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  try {
+    const res = await fetch('/api/gemini/country-info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ countryCode, variationSeed, bustCache }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const errMsg = errJson?.error || `Server returned ${res.status}`;
+      throw new Error(errMsg);
+    }
+
+    const data: CountryAIInfoResponse = await res.json();
+    countryInfoCache.set(cacheKey, data);
+    return data;
+  } catch (err) {
+    console.warn(`[GeminiService] Failed to fetch country info for ${countryCode}`, err);
+    throw err;
   }
 }

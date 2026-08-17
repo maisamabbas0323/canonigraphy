@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { BREEDS } from './src/data/breeds';
+import { COUNTRIES } from './src/data/countries';
 
 dotenv.config();
 
@@ -41,6 +42,22 @@ const narrationCache = new Map<string, {
   timestamp: number;
   generatedByApi?: boolean;
   modelUsed?: string | null;
+}>();
+
+// In-memory cache for AI-generated breed informational content (varies per seed)
+const breedInfoCache = new Map<string, {
+  history: string;
+  superpower: { title: string; description: string; anatomicalTrait: string };
+  historicalFact: string;
+  loreSnippet: string;
+  funFacts: string[];
+  timestamp: number;
+}>();
+
+// In-memory cache for AI-generated country historical context
+const countryInfoCache = new Map<string, {
+  historicalContext: string;
+  timestamp: number;
 }>();
 
 // Helper to get GoogleGenAI client safely
@@ -102,6 +119,11 @@ function ensureWavBuffer(base64Data: string, sampleRate = 24000, numChannels = 1
 // 1. API: Health & Status
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// Favicon
+app.get('/favicon.ico', (req: Request, res: Response) => {
+  res.status(204).end();
 });
 
 // 2. API: Gemini Configuration Status
@@ -279,6 +301,166 @@ function generateFallbackCaptions(text: string): Array<{ start: number; end: num
   return result;
 }
 
+// Generate breed-specific informational content using ONLY Gemini 3.1 Flash-Lite
+async function generateBreedInfo(
+  ai: GoogleGenAI,
+  breed: typeof BREEDS[0],
+  variationSeed: number
+): Promise<{
+  history: string;
+  superpower: { title: string; description: string; anatomicalTrait: string };
+  historicalFact: string;
+  loreSnippet: string;
+  funFacts: string[];
+}> {
+  const requiredModel = 'gemini-3.1-flash-lite';
+  const prompt = `You are a world-renowned canine historian and evolutionary biologist for CANINOGRAPHY, a premium natural-history documentary archive.
+
+Write rich, detailed, factually accurate informational content for this dog breed. Every statement MUST be historically and scientifically accurate. Do NOT invent false claims. Draw on real documented history, real anatomical science, and real cultural lore.
+
+Breed: ${breed.name}
+Country: ${breed.country}
+Region: ${breed.region}
+Group: ${breed.group}
+Purpose: ${breed.purpose}
+Origin Era: ${breed.originEra}
+Origin Detail: ${breed.originDetailed}
+Size: ${breed.size}
+Temperament: ${breed.temperament.join(', ')}
+
+Variation seed: ${variationSeed} (use this to inspire a fresh, unique angle on this breed)
+
+RULES:
+1. Write a new history paragraph (100-150 words) covering the breed's origin, working lineage, and cultural significance. Each request should emphasize different historical details, eras, or anecdotes while remaining factually correct.
+2. Create a superpower section with a creative title (e.g. "Metabolic Fat-Burning Switch"), a 1-2 sentence description of a real anatomical or behavioral adaptation, and a specific anatomical trait explanation.
+3. Provide ONE specific, verifiable historical fact about the breed (a date, a named dog, a documented event).
+4. Write a lore snippet (1-2 sentences) about the breed's cultural significance in folklore, literature, or tradition.
+5. Generate 4 unique fun facts — each 1-2 sentences, specific and verifiable. Avoid generic statements.
+
+Output strictly valid JSON matching this schema:
+{
+  "history": "Full paragraph...",
+  "superpower": {
+    "title": "Creative Title",
+    "description": "1-2 sentence description of real adaptation",
+    "anatomicalTrait": "Specific anatomical explanation"
+  },
+  "historicalFact": "One specific verifiable fact",
+  "loreSnippet": "Cultural significance 1-2 sentences",
+  "funFacts": ["Fact 1...", "Fact 2...", "Fact 3...", "Fact 4..."]
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: requiredModel,
+      contents: prompt,
+      config: {
+        temperature: 0.7,
+        responseMimeType: 'application/json',
+        systemInstruction: 'You are an expert canine historian. Provide only valid JSON with historically accurate information about dog breeds.',
+      },
+    });
+
+    const rawJson = response.text?.trim();
+    if (rawJson) {
+      const parsed = JSON.parse(rawJson);
+      if (parsed.history && parsed.superpower && parsed.historicalFact && parsed.loreSnippet && Array.isArray(parsed.funFacts)) {
+        return {
+          history: parsed.history,
+          superpower: {
+            title: parsed.superpower.title || 'Unknown Adaptation',
+            description: parsed.superpower.description || '',
+            anatomicalTrait: parsed.superpower.anatomicalTrait || '',
+          },
+          historicalFact: parsed.historicalFact,
+          loreSnippet: parsed.loreSnippet,
+          funFacts: parsed.funFacts.slice(0, 4),
+        };
+      }
+      throw new Error('Invalid JSON structure returned by gemini-3.1-flash-lite');
+    }
+    throw new Error('No text returned by gemini-3.1-flash-lite');
+  } catch (err: any) {
+    throw new Error(`gemini-3.1-flash-lite breed info generation failed: ${err?.message || String(err)}`);
+  }
+}
+
+// Generate country historical context using ONLY Gemini 3.1 Flash-Lite
+async function generateCountryInfo(
+  ai: GoogleGenAI,
+  countryCode: string,
+  countryName: string,
+  region: string,
+  breedSlugs: string[],
+  variationSeed: number
+): Promise<{ historicalContext: string }> {
+  const requiredModel = 'gemini-3.1-flash-lite';
+  const breedNames = breedSlugs.map(slug => BREEDS.find(b => b.slug === slug)?.name).filter(Boolean).join(', ');
+  const prompt = `You are a world-renowned canine historian for CANINOGRAPHY, a premium natural-history documentary archive.
+
+Write a rich, detailed, factually accurate historical context paragraph about dog breeds from this country/region. Every statement MUST be historically accurate. Do NOT invent false claims.
+
+Country: ${countryName}
+Region: ${region}
+Notable breeds from this region: ${breedNames || 'Various recognized breeds'}
+
+Variation seed: ${variationSeed} (use this to inspire a fresh, unique angle)
+
+RULES:
+1. Write a 60-100 word paragraph covering the country's canine heritage, breed development, cultural significance, and working traditions.
+2. Each request should emphasize different historical details while remaining factually correct.
+3. Tone: authoritative, documentary, historically observant.
+
+Output strictly valid JSON matching this schema:
+{
+  "historicalContext": "Full paragraph..."
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: requiredModel,
+      contents: prompt,
+      config: {
+        temperature: 0.65,
+        responseMimeType: 'application/json',
+        systemInstruction: 'You are an expert canine historian. Provide only valid JSON with historically accurate information.',
+      },
+    });
+
+    const rawJson = response.text?.trim();
+    if (rawJson) {
+      const parsed = JSON.parse(rawJson);
+      if (parsed.historicalContext) {
+        return { historicalContext: parsed.historicalContext };
+      }
+      throw new Error('Invalid JSON structure returned by gemini-3.1-flash-lite');
+    }
+    throw new Error('No text returned by gemini-3.1-flash-lite');
+  } catch (err: any) {
+    throw new Error(`gemini-3.1-flash-lite country info generation failed: ${err?.message || String(err)}`);
+  }
+}
+
+// Fallback breed info generator (used when API is unavailable) — generates from breed data
+function generateFallbackBreedInfo(breed: typeof BREEDS[0]) {
+  return {
+    history: breed.history,
+    superpower: {
+      title: `${breed.purpose.split(',')[0]} Heritage`,
+      description: `Evolved over centuries in ${breed.country} for specialized ${breed.purpose.toLowerCase()}, demonstrating immense environmental resilience and instinctive task mastery.`,
+      anatomicalTrait: `Structural balance adapted to ${breed.region} climate with ${breed.energy.toLowerCase()} metabolic drive and ${breed.size.toLowerCase()} frame.`,
+    },
+    historicalFact: `Documented as originating in ${breed.originEra}, preserved through dedicated regional breeders in ${breed.country}.`,
+    loreSnippet: `Revered across ${breed.region} folklore as an indispensable partner to shepherds, hunters, and guardians of historical heritage.`,
+    funFacts: [
+      `Historically bred in ${breed.country} specifically for ${breed.purpose.toLowerCase()}.`,
+      `Possesses a typical lifespan of ${breed.lifespan} with characteristic ${breed.temperament.slice(0, 3).join(', ')} disposition.`,
+      `Features distinct ${breed.height} height and ${breed.weight} weight proportional to historical working requirements.`,
+      `Categorized under the ${breed.group} group with ${breed.energy} energy demands.`,
+    ],
+  };
+}
+
 // 5. API: Documentary Chapter Narration & Audio
 app.post('/api/gemini/documentary', async (req: Request, res: Response) => {
   const { breedSlug } = req.body;
@@ -332,17 +514,116 @@ app.get('/api/breeds', (req: Request, res: Response) => {
   res.json({ total: BREEDS.length, breeds: BREEDS });
 });
 
-// Start the server with Vite middleware integration (explicit HMR host/port to avoid websocket issues)
+// 7. API: AI-generated breed informational content
+app.post('/api/gemini/breed-info', async (req: Request, res: Response) => {
+  const { breedSlug, variationSeed, bustCache } = req.body;
+  if (!breedSlug) {
+    return res.status(400).json({ error: 'breedSlug is required' });
+  }
+
+  const breed = BREEDS.find((b) => b.slug === breedSlug);
+  if (!breed) {
+    return res.status(404).json({ error: 'Breed not found in archive' });
+  }
+
+  const seed = variationSeed ?? Math.floor(Math.random() * 1e9);
+  const cacheKey = bustCache ? `${breedSlug}::bust:${bustCache}` : `${breedSlug}::seed:${seed}`;
+
+  // Check cache first (skip if bustCache is set)
+  if (!bustCache) {
+    const cached = breedInfoCache.get(cacheKey);
+    if (cached) {
+      console.log(`[CANINOGRAPHY] Breed info cache HIT for ${breedSlug} (seed:${seed})`);
+      return res.json({ breedSlug, info: cached, cached: true });
+    }
+  }
+
+  const ai = getGeminiClient();
+
+  // If no API client available, return fallback content (generated from breed data)
+  if (!ai) {
+    console.log(`[CANINOGRAPHY] Breed info: no API key, returning fallback for ${breedSlug}`);
+    const fallback = generateFallbackBreedInfo(breed);
+    return res.json({ breedSlug, info: { ...fallback, generatedByApi: false }, cached: false });
+  }
+
+  try {
+    console.log(`[CANINOGRAPHY] Generating breed info for ${breedSlug} via gemini-3.1-flash-lite (seed:${seed})`);
+    const info = await generateBreedInfo(ai, breed, seed);
+
+    // Save to cache
+    breedInfoCache.set(cacheKey, { ...info, timestamp: Date.now() });
+
+    return res.json({ breedSlug, info: { ...info, generatedByApi: true }, cached: false });
+  } catch (err: any) {
+    console.error('[CANINOGRAPHY] Breed info generation failed:', err?.message || err);
+    // Return fallback on failure
+    const fallback = generateFallbackBreedInfo(breed);
+    return res.json({ breedSlug, info: { ...fallback, generatedByApi: false }, cached: false });
+  }
+});
+
+// 8. API: AI-generated country historical context
+app.post('/api/gemini/country-info', async (req: Request, res: Response) => {
+  const { countryCode, variationSeed, bustCache } = req.body;
+  if (!countryCode) {
+    return res.status(400).json({ error: 'countryCode is required' });
+  }
+
+  const country = Object.values(COUNTRIES).find((c) => c.code === countryCode);
+  if (!country) {
+    return res.status(404).json({ error: 'Country not found in archive' });
+  }
+
+  const seed = variationSeed ?? Math.floor(Math.random() * 1e9);
+  const cacheKey = bustCache ? `${countryCode}::bust:${bustCache}` : `${countryCode}::seed:${seed}`;
+
+  // Check cache first (skip if bustCache is set)
+  if (!bustCache) {
+    const cached = countryInfoCache.get(cacheKey);
+    if (cached) {
+      console.log(`[CANINOGRAPHY] Country info cache HIT for ${countryCode} (seed:${seed})`);
+      return res.json({ countryCode, info: { historicalContext: cached.historicalContext, generatedByApi: true }, cached: true });
+    }
+  }
+
+  const ai = getGeminiClient();
+
+  // If no API client available, return static fallback
+  if (!ai) {
+    console.log(`[CANINOGRAPHY] Country info: no API key, returning fallback for ${countryCode}`);
+    return res.json({
+      countryCode,
+      info: { historicalContext: country.historicalContext || '', generatedByApi: false },
+      cached: false,
+    });
+  }
+
+  try {
+    console.log(`[CANINOGRAPHY] Generating country info for ${countryCode} via gemini-3.1-flash-lite (seed:${seed})`);
+    const info = await generateCountryInfo(ai, countryCode, country.name, country.region, country.breedSlugs, seed);
+
+    // Save to cache
+    countryInfoCache.set(cacheKey, { historicalContext: info.historicalContext, timestamp: Date.now() });
+
+    return res.json({ countryCode, info: { ...info, generatedByApi: true }, cached: false });
+  } catch (err: any) {
+    console.error('[CANINOGRAPHY] Country info generation failed:', err?.message || err);
+    // Return static fallback on failure
+    return res.json({
+      countryCode,
+      info: { historicalContext: country.historicalContext || '', generatedByApi: false },
+      cached: false,
+    });
+  }
+});
+
+// Start the server with Vite middleware integration
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: {
-          protocol: 'ws',
-          host: 'localhost',
-          port: 24678,
-        },
       },
       appType: 'spa',
     });
