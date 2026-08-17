@@ -32,11 +32,19 @@ export async function disconnectApiKey(): Promise<void> {
   } catch {}
 }
 
+// Client-side cache keyed by breedSlug + variationSeed so different seeds cache separately.
 const clientNarrationCache = new Map<string, DocumentaryNarrationResponse>();
 
-export async function fetchDocumentaryNarration(breedSlug: string): Promise<DocumentaryNarrationResponse> {
-  const cached = clientNarrationCache.get(breedSlug);
-  if (cached) {
+export async function fetchDocumentaryNarration(
+  breedSlug: string,
+  options?: { forceRefresh?: boolean; variationSeed?: number }
+): Promise<DocumentaryNarrationResponse> {
+  const forceRefresh = options?.forceRefresh !== undefined ? options.forceRefresh : true;
+  const variationSeed = options?.variationSeed ?? Math.floor(Math.random() * 1e9);
+
+  const cacheKey = `${breedSlug}::seed:${variationSeed}`;
+  const cached = clientNarrationCache.get(cacheKey);
+  if (!forceRefresh && cached) {
     return cached;
   }
 
@@ -44,15 +52,19 @@ export async function fetchDocumentaryNarration(breedSlug: string): Promise<Docu
     const res = await fetch('/api/gemini/documentary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ breedSlug }),
+      body: JSON.stringify({ breedSlug, forceRefresh, variationSeed }),
     });
 
     if (!res.ok) {
-      throw new Error(`Server returned ${res.status}`);
+      // try to surface server JSON error if any
+      const errJson = await res.json().catch(() => null);
+      const errMsg = errJson?.error || `Server returned ${res.status}`;
+      throw new Error(errMsg);
     }
 
     const data: DocumentaryNarrationResponse = await res.json();
-    clientNarrationCache.set(breedSlug, data);
+    // Cache per-seed so repeated requests with same seed return same phrasing
+    clientNarrationCache.set(cacheKey, data);
     return data;
   } catch (err) {
     console.warn(`[DocumentaryService] Failed to fetch chapter for ${breedSlug}`, err);
@@ -61,8 +73,9 @@ export async function fetchDocumentaryNarration(breedSlug: string): Promise<Docu
 }
 
 export function prefetchDocumentaryNarration(breedSlug: string): void {
-  if (!clientNarrationCache.has(breedSlug)) {
-    fetchDocumentaryNarration(breedSlug).catch(() => {});
+  // Kick off a fetch with a random seed but do not throw on failure
+  const variationSeed = Math.floor(Math.random() * 1e9);
+  if (!clientNarrationCache.has(`${breedSlug}::seed:${variationSeed}`)) {
+    fetchDocumentaryNarration(breedSlug, { forceRefresh: true, variationSeed }).catch(() => {});
   }
 }
-
