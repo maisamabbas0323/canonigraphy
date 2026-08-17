@@ -12,6 +12,23 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Operator-controlled behavior: allow using GEMINI_API_KEY from environment without user connect
+// Set ALLOW_ENV_GEMINI=true to permit preconfigured env key; default is false (require user connect at first open)
+const ALLOW_ENV_GEMINI = process.env.ALLOW_ENV_GEMINI === 'true';
+
+// Startup diagnostics: clarify which env keys exist and our policy
+const hasGoogleEnv = Boolean(process.env.GOOGLE_API_KEY && process.env.GOOGLE_API_KEY.trim() !== '' && process.env.GOOGLE_API_KEY !== 'MY_GOOGLE_API_KEY');
+const hasGeminiEnv = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '' && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+if (hasGoogleEnv && hasGeminiEnv) {
+  console.log('[CANINOGRAPHY] Both GOOGLE_API_KEY and GEMINI_API_KEY are present in the environment. NOTE: the server will prefer GEMINI for Gemini model calls and will NOT auto-use GOOGLE_API_KEY for Gemini features.');
+} else if (hasGeminiEnv) {
+  console.log('[CANINOGRAPHY] GEMINI_API_KEY present in environment. Preconfigure-by-env is', ALLOW_ENV_GEMINI ? 'ENABLED' : 'DISABLED');
+} else if (hasGoogleEnv) {
+  console.log('[CANINOGRAPHY] GOOGLE_API_KEY present but GEMINI_API_KEY not set. Gemini features will be unavailable unless you connect at runtime or set GEMINI_API_KEY.');
+} else {
+  console.log('[CANINOGRAPHY] No Gemini API key provided in environment. Use the UI to connect a Gemini 3.1 Flash-Lite key.');
+}
+
 // In-memory runtime API key store (if user provides via setup screen)
 let userConfiguredApiKey: string | null = null;
 
@@ -28,8 +45,8 @@ const narrationCache = new Map<string, {
 // NOTE: Intentionally only uses GEMINI_API_KEY or an in-memory runtime key provided by the user.
 // We avoid using GOOGLE_API_KEY to prevent accidental automatic connections.
 function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = userConfiguredApiKey || process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey.trim() === '' || apiKey === 'MY_GEMINI_API_KEY') {
+  const apiKey = userConfiguredApiKey || (ALLOW_ENV_GEMINI ? process.env.GEMINI_API_KEY : undefined);
+  if (!apiKey || (typeof apiKey === 'string' && apiKey.trim() === '') || apiKey === 'MY_GEMINI_API_KEY') {
     return null;
   }
   return new GoogleGenAI({
@@ -87,11 +104,14 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // 2. API: Gemini Configuration Status
 app.get('/api/gemini/status', async (req: Request, res: Response) => {
-  const ai = getGeminiClient();
-  if (!ai) {
+  // We report 'configured' true only when the user has connected during this runtime OR
+  // when environment preconfigure is explicitly enabled via ALLOW_ENV_GEMINI=true.
+  const configured = Boolean(userConfiguredApiKey) || (ALLOW_ENV_GEMINI && Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY'));
+
+  if (!configured) {
     return res.json({
       status: 'NOT_CONFIGURED',
-      message: 'API key is not configured.',
+      message: 'API key is not configured for this session. Please connect via the UI.',
       configured: false,
     });
   }
