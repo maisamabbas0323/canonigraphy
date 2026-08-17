@@ -32,8 +32,8 @@ export const App: React.FC = () => {
   const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
-  // Start with API settings closed and unconfigured by default to avoid "random" prefilled connection
-  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState<boolean>(false);
+  // Force API settings modal open on first load; require user to provide Gemini 3.1 Flash-Lite key
+  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState<boolean>(true);
   const [isApiConfigured, setIsApiConfigured] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(true);
 
@@ -42,9 +42,22 @@ export const App: React.FC = () => {
 
   // Initial API Key check
   useEffect(() => {
-    checkGeminiStatus().then((configured) => {
-      setIsApiConfigured(configured);
-    });
+    (async () => {
+      try {
+        const result = await checkGeminiStatus();
+        let configured = false;
+        if (result && typeof result === 'object') {
+          configured = Boolean((result as any).configured);
+        } else {
+          configured = Boolean(result);
+        }
+        setIsApiConfigured(configured);
+        // If already configured on server, close the modal, otherwise keep it open
+        if (configured) setIsApiSettingsOpen(false);
+      } catch {
+        setIsApiConfigured(false);
+      }
+    })();
   }, []);
 
   // Track visited breeds for constellation journey
