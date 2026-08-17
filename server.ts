@@ -115,8 +115,8 @@ app.post('/api/gemini/connect', async (req: Request, res: Response) => {
   const trimmedKey = apiKey.trim();
   const testAi = new GoogleGenAI({ apiKey: trimmedKey });
 
-  // Sequentially try several widely supported models for maximum key compatibility
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.7-flash'];
+  // Prefer Gemini 3.1 Flash-Lite first for initial configuration and compatibility
+  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.7-flash'];
   let lastError: any = null;
   let success = false;
 
@@ -241,8 +241,9 @@ async function generateSpeechAudioWithFallback(
   ai: GoogleGenAI,
   text: string
 ): Promise<{ audioBase64: string; mimeType: string } | null> {
-  // Candidate speech models supporting direct audio synthesis
+  // Prefer Gemini 3.1 Flash-Lite (or Flash TTS) first for best quality audio when available
   const candidateModels = [
+    'gemini-3.1-flash-lite',
     'gemini-3.1-flash-tts-preview',
     'gemini-2.5-flash-tts',
     'gemini-2.5-flash',
@@ -446,4 +447,3 @@ async function startServer() {
 }
 
 startServer();
-
