@@ -25,6 +25,8 @@ const narrationCache = new Map<string, {
 }>();
 
 // Helper to get GoogleGenAI client safely
+// NOTE: Intentionally only uses GEMINI_API_KEY or an in-memory runtime key provided by the user.
+// We avoid using GOOGLE_API_KEY to prevent accidental automatic connections.
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = userConfiguredApiKey || process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey.trim() === '' || apiKey === 'MY_GEMINI_API_KEY') {
@@ -421,28 +423,37 @@ async function startServer() {
     console.log(`[CANINOGRAPHY] Server running on http://0.0.0.0:${PORT}`);
 
     // Non-blocking background pre-warming for initial breeds
-    setTimeout(async () => {
-      const ai = getGeminiClient();
-      if (!ai) return;
-      console.log('[CANINOGRAPHY] Starting background speech audio prewarm for initial chapters...');
-      for (const breed of BREEDS.slice(0, 5)) {
-        if (!narrationCache.has(breed.slug)) {
-          try {
-            const audioResult = await generateSpeechAudioWithFallback(ai, breed.cinematicNarration);
-            if (audioResult) {
-              narrationCache.set(breed.slug, {
-                text: breed.cinematicNarration,
-                captions: breed.captions || generateFallbackCaptions(breed.cinematicNarration),
-                audioBase64: audioResult.audioBase64,
-                audioMimeType: audioResult.mimeType,
-                timestamp: Date.now(),
-              });
-              console.log(`[CANINOGRAPHY] Prewarmed speech audio for ${breed.name}`);
+    // Controlled by PREWARM_ON_START environment variable to avoid accidental API usage at startup.
+    // Set PREWARM_ON_START=true to enable prewarming when you intentionally want it.
+    if (process.env.PREWARM_ON_START === 'true') {
+      setTimeout(async () => {
+        const ai = getGeminiClient();
+        if (!ai) return;
+        console.log('[CANINOGRAPHY] Starting background speech audio prewarm for initial chapters...');
+        for (const breed of BREEDS.slice(0, 5)) {
+          if (!narrationCache.has(breed.slug)) {
+            try {
+              const audioResult = await generateSpeechAudioWithFallback(ai, breed.cinematicNarration);
+              if (audioResult) {
+                narrationCache.set(breed.slug, {
+                  text: breed.cinematicNarration,
+                  captions: breed.captions || generateFallbackCaptions(breed.cinematicNarration),
+                  audioBase64: audioResult.audioBase64,
+                  audioMimeType: audioResult.mimeType,
+                  timestamp: Date.now(),
+                });
+                console.log(`[CANINOGRAPHY] Prewarmed speech audio for ${breed.name}`);
+              }
+            } catch (err) {
+              // Log but continue
+              console.warn('[CANINOGRAPHY] Prewarm failed for', breed.slug, err?.message || err);
             }
-          } catch {}
+          }
         }
-      }
-    }, 1000);
+      }, 1000);
+    } else {
+      console.log('[CANINOGRAPHY] Background prewarm disabled. To enable, set PREWARM_ON_START=true');
+    }
   });
 }
 
