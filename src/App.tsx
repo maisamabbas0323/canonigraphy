@@ -32,8 +32,9 @@ export const App: React.FC = () => {
   const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
-  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState<boolean>(true);
-  const [isApiConfigured, setIsApiConfigured] = useState<boolean>(true);
+  // Start with API settings closed and unconfigured by default to avoid "random" prefilled connection
+  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState<boolean>(false);
+  const [isApiConfigured, setIsApiConfigured] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(true);
 
   // Current Breed
