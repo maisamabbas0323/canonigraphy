@@ -118,7 +118,7 @@ app.get('/api/gemini/status', async (req: Request, res: Response) => {
 
   return res.json({
     status: 'READY',
-    message: 'Archive narration engine is ready.',
+    message: 'Archive narration engine is ready (gemini-3.1-flash-lite).',
     configured: true,
   });
 });
@@ -137,55 +137,27 @@ app.post('/api/gemini/connect', async (req: Request, res: Response) => {
   const trimmedKey = apiKey.trim();
   const testAi = new GoogleGenAI({ apiKey: trimmedKey });
 
-  // Prefer Gemini 3.1 Flash-Lite first for initial configuration and compatibility
-  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.7-flash'];
-  let lastError: any = null;
-  let success = false;
-
-  for (const modelName of modelsToTry) {
-    try {
-      const response = await testAi.models.generateContent({
-        model: modelName,
-        contents: 'Confirm connection.',
-        config: {
-          maxOutputTokens: 5,
-          temperature: 0.1,
-        },
-      });
-
-      if (response && response.text) {
-        success = true;
-        break;
-      }
-    } catch (error: any) {
-      lastError = error;
-    }
-  }
-
-  if (success) {
-    userConfiguredApiKey = trimmedKey;
-    return res.json({
-      status: 'READY',
-      valid: true,
-      message: 'Archive connection established.',
+  // STRICT: require gemini-3.1-flash-lite for all textual generation. Do NOT accept fallbacks.
+  const requiredModel = 'gemini-3.1-flash-lite';
+  try {
+    const response = await testAi.models.generateContent({
+      model: requiredModel,
+      contents: 'Confirm connection to gemini-3.1-flash-lite.',
+      config: { maxOutputTokens: 10, temperature: 0.0 },
     });
-  }
 
-  // Extract clean, human-readable error from Google Gen AI client to assist debugging
-  let errorMessage = 'Unable to connect. Please check the key and try again.';
-  if (lastError) {
-    errorMessage = lastError.message || lastError.statusMessage || String(lastError);
-    // Sanitize any potential accidental echoing of the raw key in error strings
-    if (errorMessage.includes(trimmedKey)) {
-      errorMessage = errorMessage.replace(trimmedKey, '***YOUR_KEY***');
+    if (response && response.text) {
+      userConfiguredApiKey = trimmedKey;
+      return res.json({ status: 'READY', valid: true, message: 'Archive connection established (gemini-3.1-flash-lite).' });
     }
+  } catch (err: any) {
+    // Fall through to clear error
+    const msg = err?.message || err?.statusMessage || String(err);
+    const safeMsg = msg.includes(trimmedKey) ? msg.replace(trimmedKey, '***YOUR_KEY***') : msg;
+    return res.status(400).json({ status: 'INVALID', valid: false, message: `Unable to validate gemini-3.1-flash-lite access: ${safeMsg}` });
   }
 
-  return res.status(400).json({
-    status: 'INVALID',
-    valid: false,
-    message: errorMessage,
-  });
+  return res.status(400).json({ status: 'INVALID', valid: false, message: 'Unable to validate gemini-3.1-flash-lite access with that key.' });
 });
 
 // 4. API: Disconnect custom API key
@@ -194,12 +166,12 @@ app.post('/api/gemini/disconnect', (req: Request, res: Response) => {
   res.json({ status: 'DISCONNECTED', message: 'API key disconnected.' });
 });
 
-// Generate script and subtitles with Gemini 3.1 Flash-Lite
+// Generate script and subtitles using ONLY Gemini 3.1 Flash-Lite
 async function generateDocumentaryScriptAndSubtitles(
   ai: GoogleGenAI,
   breed: typeof BREEDS[0]
 ): Promise<{ text: string; captions: Array<{ start: number; end: number; text: string }> }> {
-  const candidateModels = ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.7-flash'];
+  const requiredModel = 'gemini-3.1-flash-lite';
   const prompt = `You are the lead natural-history documentary narrator and historian for CANINOGRAPHY.
 Write a cinematic, warm, authoritative documentary narration script and synchronized subtitle timestamps for:
 
@@ -222,91 +194,65 @@ RULES:
   ]
 }`;
 
-  for (const model of candidateModels) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          temperature: 0.5,
-          responseMimeType: 'application/json',
-          systemInstruction:
-            'You are an expert natural history documentary scriptwriter. Provide only valid JSON with narration and captions.',
-        },
-      });
+  try {
+    const response = await ai.models.generateContent({
+      model: requiredModel,
+      contents: prompt,
+      config: {
+        temperature: 0.45,
+        responseMimeType: 'application/json',
+        systemInstruction: 'You are an expert natural history documentary scriptwriter. Provide only valid JSON with narration and captions.',
+      },
+    });
 
-      const rawJson = response.text?.trim();
-      if (rawJson) {
-        const parsed = JSON.parse(rawJson);
-        if (parsed.narration && Array.isArray(parsed.captions) && parsed.captions.length > 0) {
-          return {
-            text: parsed.narration,
-            captions: parsed.captions,
-          };
-        }
+    const rawJson = response.text?.trim();
+    if (rawJson) {
+      const parsed = JSON.parse(rawJson);
+      if (parsed.narration && Array.isArray(parsed.captions) && parsed.captions.length > 0) {
+        return { text: parsed.narration, captions: parsed.captions };
       }
-    } catch {
-      continue;
+      throw new Error('Invalid JSON structure returned by gemini-3.1-flash-lite');
     }
+    throw new Error('No text returned by gemini-3.1-flash-lite');
+  } catch (err: any) {
+    // Bubble a clear error up so caller can respond with 502 and instruct the user
+    throw new Error(`gemini-3.1-flash-lite generation failed: ${err?.message || String(err)}`);
   }
-
-  // Fallback to local verified narration and generated captions
-  const scriptText = breed.cinematicNarration;
-  return {
-    text: scriptText,
-    captions: breed.captions || generateFallbackCaptions(scriptText),
-  };
 }
 
-// Helper to generate Gemini Audio via Gemini 3.1 Flash TTS Preview
-async function generateSpeechAudioWithFallback(
+// Helper to generate Gemini Audio using ONLY gemini-3.1-flash-tts-preview (strict)
+async function generateSpeechAudioStrict(
   ai: GoogleGenAI,
   text: string
 ): Promise<{ audioBase64: string; mimeType: string } | null> {
-  // Prefer Gemini 3.1 Flash-Lite (or Flash TTS) first for best quality audio when available
-  const candidateModels = [
-    'gemini-3.1-flash-lite',
-    'gemini-3.1-flash-tts-preview',
-    'gemini-2.5-flash-tts',
-    'gemini-2.5-flash',
-  ];
-
-  for (const model of candidateModels) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: [
-          {
-            parts: [
-              {
-                text: `Read in a warm, calm, authoritative natural-history documentary tone: ${text}`,
-              },
-            ],
-          },
-        ],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Charon' }, // Warm, calm, deep, measured documentary voice
-            },
-          },
+  const requiredModel = 'gemini-3.1-flash-tts-preview';
+  try {
+    const response = await ai.models.generateContent({
+      model: requiredModel,
+      contents: [
+        {
+          parts: [
+            { text: `Read in a warm, calm, authoritative natural-history documentary tone: ${text}` },
+          ],
         },
-      });
+      ],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } },
+      },
+    });
 
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData && part.inlineData.data) {
-          const { base64, mimeType } = ensureWavBuffer(part.inlineData.data, 24000, 1, 16);
-          return { audioBase64: base64, mimeType };
-        }
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData && part.inlineData.data) {
+        const { base64, mimeType } = ensureWavBuffer(part.inlineData.data, 24000, 1, 16);
+        return { audioBase64: base64, mimeType };
       }
-    } catch {
-      // Continue to next speech candidate model
-      continue;
     }
-  }
 
-  return null;
+    throw new Error('No audio returned by gemini-3.1-flash-tts-preview');
+  } catch (err: any) {
+    throw new Error(`gemini-3.1-flash-tts-preview audio generation failed: ${err?.message || String(err)}`);
+  }
 }
 
 // Helper to chunk sentences into realistic synchronized captions
@@ -321,14 +267,9 @@ function generateFallbackCaptions(text: string): Array<{ start: number; end: num
 
   for (const sentence of sentences) {
     const wordCount = sentence.split(/\s+/).length;
-    // Calm documentary pace: ~2.1 words per second
     const duration = Math.max(3.0, Math.min(8.0, wordCount / 2.1 + 0.6));
     const end = parseFloat((currentStart + duration).toFixed(1));
-    result.push({
-      start: parseFloat(currentStart.toFixed(1)),
-      end,
-      text: sentence,
-    });
+    result.push({ start: parseFloat(currentStart.toFixed(1)), end, text: sentence });
     currentStart = end + 0.3;
   }
 
@@ -342,20 +283,12 @@ app.post('/api/gemini/documentary', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'breedSlug is required' });
   }
 
-  // Check cache first for instant (<10ms) delivery
+  // Check cache first
   const cached = narrationCache.get(breedSlug);
   if (cached) {
-    return res.json({
-      breedSlug,
-      text: cached.text,
-      captions: cached.captions,
-      audioBase64: cached.audioBase64,
-      audioMimeType: cached.audioMimeType,
-      cached: true,
-    });
+    return res.json({ breedSlug, text: cached.text, captions: cached.captions, audioBase64: cached.audioBase64, audioMimeType: cached.audioMimeType, cached: true });
   }
 
-  // Find local breed metadata
   const breed = BREEDS.find((b) => b.slug === breedSlug);
   if (!breed) {
     return res.status(404).json({ error: 'Breed not found in archive' });
@@ -363,64 +296,38 @@ app.post('/api/gemini/documentary', async (req: Request, res: Response) => {
 
   const ai = getGeminiClient();
   if (!ai) {
-    // Unconfigured state fallback
-    const scriptText = breed.cinematicNarration;
-    const captions = breed.captions || generateFallbackCaptions(scriptText);
-    return res.json({
-      breedSlug,
-      text: scriptText,
-      captions,
-      cached: false,
-    });
+    return res.status(503).json({ error: 'Gemini API key not configured for this session. Please connect using the API Setup modal.' });
   }
 
   try {
-    // 1. Generate rich documentary text and synchronized subtitles with Gemini 3.1 Flash-Lite
+    // 1) Generate full dossier via gemini-3.1-flash-lite (strict). The UI relies on this.
+    // We reuse the documentary script generator as the core textual generator for the short narration;
+    // if you have a separate structured-dossier generator, call it here (but it must also use gemini-3.1-flash-lite).
     const { text: scriptText, captions } = await generateDocumentaryScriptAndSubtitles(ai, breed);
 
-    // 2. Generate natural documentary voice audio via Gemini 3.1 Flash TTS Preview
+    // 2) Generate audio strictly with gemini-3.1-flash-tts-preview. If it fails, continue without audio but inform the client.
     let audioResult: { audioBase64: string; mimeType: string } | null = null;
     try {
-      audioResult = await generateSpeechAudioWithFallback(ai, scriptText);
-    } catch {
-      audioResult = null;
+      audioResult = await generateSpeechAudioStrict(ai, scriptText);
+    } catch (audioErr: any) {
+      // Log and continue without audio
+      console.warn('[CANINOGRAPHY] Audio generation failed (strict):', audioErr?.message || audioErr);
     }
 
-    // Save to cache for instant sub-second playback on subsequent requests
-    narrationCache.set(breedSlug, {
-      text: scriptText,
-      captions,
-      audioBase64: audioResult?.audioBase64,
-      audioMimeType: audioResult?.mimeType,
-      timestamp: Date.now(),
-    });
+    // Save to cache
+    narrationCache.set(breedSlug, { text: scriptText, captions, audioBase64: audioResult?.audioBase64, audioMimeType: audioResult?.mimeType, timestamp: Date.now() });
 
-    return res.json({
-      breedSlug,
-      text: scriptText,
-      captions,
-      audioBase64: audioResult?.audioBase64,
-      audioMimeType: audioResult?.mimeType,
-      cached: false,
-    });
-  } catch {
-    const fallbackText = breed.cinematicNarration;
-    const fallbackCaptions = breed.captions || generateFallbackCaptions(fallbackText);
-    return res.json({
-      breedSlug,
-      text: fallbackText,
-      captions: fallbackCaptions,
-      cached: false,
-    });
+    return res.json({ breedSlug, text: scriptText, captions, audioBase64: audioResult?.audioBase64, audioMimeType: audioResult?.mimeType, cached: false });
+  } catch (err: any) {
+    // Strict enforcement: return an explicit error if gemini-3.1-flash-lite generation failed.
+    console.error('[CANINOGRAPHY] Documentary generation failed:', err?.message || err);
+    return res.status(502).json({ error: 'Failed to generate documentary via gemini-3.1-flash-lite. See server logs for details.' });
   }
 });
 
 // 6. API: Breeds list endpoint
 app.get('/api/breeds', (req: Request, res: Response) => {
-  res.json({
-    total: BREEDS.length,
-    breeds: BREEDS,
-  });
+  res.json({ total: BREEDS.length, breeds: BREEDS });
 });
 
 // Start the server with Vite middleware integration
@@ -441,31 +348,21 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[CANINOGRAPHY] Server running on http://0.0.0.0:${PORT}`);
-
-    // Non-blocking background pre-warming for initial breeds
-    // Controlled by PREWARM_ON_START environment variable to avoid accidental API usage at startup.
-    // Set PREWARM_ON_START=true to enable prewarming when you intentionally want it.
     if (process.env.PREWARM_ON_START === 'true') {
+      console.log('[CANINOGRAPHY] Starting background speech audio prewarm for initial chapters...');
       setTimeout(async () => {
         const ai = getGeminiClient();
         if (!ai) return;
-        console.log('[CANINOGRAPHY] Starting background speech audio prewarm for initial chapters...');
         for (const breed of BREEDS.slice(0, 5)) {
           if (!narrationCache.has(breed.slug)) {
             try {
-              const audioResult = await generateSpeechAudioWithFallback(ai, breed.cinematicNarration);
+              const { text: scriptText } = await generateDocumentaryScriptAndSubtitles(ai, breed);
+              const audioResult = await generateSpeechAudioStrict(ai, scriptText);
               if (audioResult) {
-                narrationCache.set(breed.slug, {
-                  text: breed.cinematicNarration,
-                  captions: breed.captions || generateFallbackCaptions(breed.cinematicNarration),
-                  audioBase64: audioResult.audioBase64,
-                  audioMimeType: audioResult.mimeType,
-                  timestamp: Date.now(),
-                });
+                narrationCache.set(breed.slug, { text: scriptText, captions: breed.captions || generateFallbackCaptions(scriptText), audioBase64: audioResult.audioBase64, audioMimeType: audioResult.mimeType, timestamp: Date.now() });
                 console.log(`[CANINOGRAPHY] Prewarmed speech audio for ${breed.name}`);
               }
             } catch (err) {
-              // Log but continue
               console.warn('[CANINOGRAPHY] Prewarm failed for', breed.slug, err?.message || err);
             }
           }
